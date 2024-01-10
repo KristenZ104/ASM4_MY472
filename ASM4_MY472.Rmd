@@ -20,25 +20,25 @@ The report and code appendix will be uploaded at [here](https://github.com/Krist
 
 In the ever-evolving landscape of music, the question of an artist's enduring legacy is a fascinating exploration into the dynamic interplay between time, taste, and cultural resonance. As we stand at the threshold of 2024, a critical inquiry beckons: How has the music of these renowned artists endured, and what features or characteristics might elucidate the enduring engagement of their work? 
 
-This research seeks to find the answer. We plan to use the current popularity of artists on Spotify as an indicator of popularity, analyze their fan base, recent release dates, number of tracks, song style, song ratings, and other factors to understand whether these artists will become popular in 2023.
+This research seeks to find the answer. It uses the current popularity of artists on Spotify as an indicator of popularity, analyze their fan base, recent release dates, number of tracks, song style, song ratings, and other factors to understand whether these artists will become popular in 2023.
 
 ## Data
 
-We will obtain data from three data sources.
+Data is obtained from three sourses.
 
-The first source of data is "the 100 greatest music artists" published by [Rolling Stone on their website](https://www.rollingstone.com/music/music-lists/100-greatest-artists-147446/) in December 2010. The website introduces the rankings, names, and descriptions of artists. Due to the dynamic loading of content about multiple artists on the website, we will use the virtual WebDriver provided by the `RSelenium` package to crawl the information on the webpage.
+The first source of data is "the 100 greatest music artists" published by [Rolling Stone on their website](https://www.rollingstone.com/music/music-lists/100-greatest-artists-147446/) in December 2010. The website introduces the rankings, names, and descriptions of artists. Due to the dynamic loading of content about multiple artists on the website. The RSelenium package's virtual WebDriver is used to extract webpage information efficiently.
 
-The second source of data is [the Spotify Web API](https://developer.spotify.com/documentation/web-api). This is the Spotify website used to allow users to batchly obtain information about desired artists or tracks. We need to register an account and apply for API Key activation on Spotify. We will use `httr` package's POST method to obtain various information about the artists and tracks we want, including the number of followers of artists on Spotify, song genres, popularity, and so on.
+The second source of data is [the Spotify Web API](https://developer.spotify.com/documentation/web-api). This is the Spotify website used to allow users to batchly obtain information about desired artists or tracks. Firstly, register an account and apply for API Key activation on Spotify. Then, use `httr` package's POST method to obtain various information about the artists, including the number of followers of artists on Spotify, song genres, popularity, and so on.
 
 The third source of data is [Musicbrainz API](https://musicbrainz.org/doc/MusicBrainz_API). The Musicbrainz website provides more information on artists including ratings, genres and tags, which can help us understand the popularity of more artists.
 
-We will combine data from different sources by artist name. Then I will store the captured artist and track information in separate datasets, and then save it in a local `Rdata` file. In this way, for our analysis after completing the crawling, we do not need to repeat the crawling, but instead obtain the corresponding data files by loading the local data file.
+Combine data from different sources by artist name. Then, store the captured artist and track information in separate datasets, and save it in a local `Rdata` file. This approach allows for the analysis to proceed without the need for repeated data scraping. The relevant datasets, once compiled and saved locally, can be readily accessed by loading the respective Rdata files.
 
 ## Analysis
 
-After capturing the data of Rolling Stones and the followers and popularity of artists on Spotify, we can take a preliminary look at the corresponding results:
+After capturing the data of Rolling Stones and the followers and popularity of artists on Spotify, take a preliminary look at the corresponding results:
 
-```{r, warning=F, message=F, fig.width=8, fig.height=4}
+```{r, echo=T, warning=F, message=F, fig.width=8, fig.height=4}
 library(tidyverse)
 library(patchwork)
 
@@ -66,29 +66,29 @@ p2 <- ggplot(rollingstone_df_combined, aes(x=rank_id, y=popularity)) +
 p1 + p2
 ```
 
-By observing the followers on Spotify, we found that among the 100 great artists selected at the end of 2010, Eminem and Queen's followers were significantly ahead of other artists, at around 8 million and 5 million respectively. The fan base of other artists ranges from 1 million to 3 million. Popularity on Spotify is an indicator that measures the popularity of a work based on its playback, ranging from 0 to 100. The higher the value, the more popular the artist is. It can be observed that the median popularity of these 100 artists at the end of 2023 was 67, and the degree of dispersion was relatively high. 
+By observing the followers on Spotify, it indicates that among the 100 great artists selected at the end of 2010, Eminem and Queen's followers were significantly ahead of other artists, at around 8 million and 5 million respectively. The fan base of other artists ranges from 1 million to 3 million. Popularity on Spotify is an indicator that measures the popularity of a work based on its playback, ranging from 0 to 100. The higher the value, the more popular the artist is. It can be observed that the degree of dispersion of the latest popularity was at a relatively high level.
 
-Let's take a look at the top 10 and bottom 10 artists respectively:
+Let's take a look at the bottom 10 and top 10 artists respectively:
 
-```{r, warning=F, message=F}
-# Explore the top 10 artists in terms of popularity
-rollingstone_df_combined %>%
-  arrange(-popularity) %>% # Place the top 10 artists in a descending pattern regarding popularity
-  dplyr::select(rank_id, artist, popularity, genre) %>%
-  head(10)
-
+```{r, echo=T, warning=F, message=F}
 # Explore the bottom 10 artists in terms of popularity
 rollingstone_df_combined %>%
   arrange(popularity) %>% # Place the bottom 10 artists in an ascending pattern regarding popularity
   dplyr::select(rank_id, artist, popularity, genre) %>%
   head(10)
+
+# Explore the top 10 artists in terms of popularity
+rollingstone_df_combined %>%
+  arrange(-popularity) %>% # Place the top 10 artists in a descending pattern regarding popularity
+  dplyr::select(rank_id, artist, popularity, genre) %>%
+  head(10)
 ```
 
-The band "Parliament and Funkadelic" seems to have undergone a name change, resulting in no valid information being retrieved from Spotify. Overall, among artists with lower popularity, no very obvious genes were found, except for the classic girl group. Among the artists who still have high popularity, we found that hip hop and various rock categories are relatively high. However, Spotify's segmentation of genes is relatively detailed, which makes it difficult to classify and analyze them well.
+The band "Parliament and Funkadelic" seems to have undergone a name change, resulting in no valid information being retrieved from Spotify. Overall, among artists with lower popularity, they span a wide range of musical genres with no specific, dominant genres found, reflecting a niche field. Among the artists who have high popularity, it was found that hip hop and various rock categories are relatively high. However, Spotify's segmentation of genes is relatively detailed, which makes it difficult to classify and analyze them well.
 
-Next, we will observe the impact of fan base, latest album release date, and average album track count on popularity:
+Next, observe the impact of fan base, latest album release date, and average album track count on popularity:
 
-```{r, message=F, warning=F, fig.width=10, fig.height=4}
+```{r,echo=T, message=F, warning=F, fig.width=10, fig.height=4}
 # Visualization for the relationship between number of followers and popularity
 p3 <- rollingstone_df_combined %>%
   ggplot(aes(x=follower, y=popularity)) +
@@ -118,9 +118,9 @@ p5 <- rollingstone_df_combined %>%
 p3 + p4 + p5
 ```
 
-From the picture, it can be seen that artists with more fans will have higher popularity if they have recently released new albums. The average number of tracks per album does not seem to have a significant relationship with popularity.
+From the picture, it can be seen that artists with more fans will have higher popularity. Also, the recent activity or new releases can contribute to an artist's popularity. The average number of tracks per album does not seem to have a significant relationship with popularity.
 
-```{r, warning=F, message=F, fig.width=8, fig.height=3}
+```{r, echo=T, warning=F, message=F, fig.width=8, fig.height=3}
 load("musicbrainz_info.Rdata")
 
 # Combine MusicBrainz data with Spotify popularity data
@@ -160,7 +160,7 @@ p7 <- genre_rating %>%
 p6 + p7
 ```
 
-From the result, we can find the gene with highest rates and popularity From the results, it can be seen that various music styles have received positive reviews from the audience, with the most outstanding being soul jazz, northern soul, latin rock, jazz blues, and close harmony. In popularity, the most common styles are Piano Rock, Britpop, New Jack Swing, and Dance Pop. We can see that although jazz style will receive positive reviews, it hasn't been able to continue to be popular. In popular styles, it is often the more cheerful and rhythmic music style. On the contrary, some more elegant music styles, although highly praised and selected as great artists, are difficult to sustain popularity in 2023.
+From the results, it can be seen that various music styles have received positive reviews from the audience, with the most outstanding being soul jazz, northern soul, latin rock, jazz blues, and close harmony. In popularity, the most common styles are horrorcore, symphonic rock, pop rap, piano rock, and britpop. It shows that although jazz style will receive positive reviews, it hasn't been able to continue to be popular. In popular styles, it is often the more cheerful and rhythmic music style. On the contrary, some more elegant music styles, although highly praised and selected as great artists, are difficult to sustain popularity in 2023.
 
 ```{r, warning=F, message=F, eval=F}
 library(httr)
