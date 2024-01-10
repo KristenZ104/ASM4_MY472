@@ -1,7 +1,7 @@
 ---
 title: Assignment 4
 author: 202341436
-date: 08-01-2024
+date: 10-01-2024
 output: html_document
 ---
 
@@ -84,7 +84,7 @@ rollingstone_df_combined %>%
   head(10)
 ```
 
-The band "Parliament and Funkadelic" seems to have undergone a name change, resulting in no valid information being retrieved from Spotify. Overall, among artists with lower popularity, they span a wide range of musical genres with no specific, dominant genres found, reflecting a niche field. Among the artists who have high popularity, it was found that hip hop and various rock categories are relatively high. However, Spotify's segmentation of genes is relatively detailed, which makes it difficult to classify and analyze them well.
+The band "Parliament and Funkadelic" seems to have undergone a name change, resulting in no valid information being retrieved from Spotify. Overall, among artists with lower popularity, they do not conform to a single or a few dominant musical styles, but rather span a broad spectrum of genres, reflecting a rich and varied musical landscape. Among the artists who have high popularity, it was found that hip hop and various rock categories are relatively high. However, Spotify's detailed segmentation of genres presents a challenge in broadly classifying and analyzing these artists, as each represents a unique and specific niche within the larger musical genres.
 
 Next, observe the impact of fan base, latest album release date, and average album track count on popularity:
 
