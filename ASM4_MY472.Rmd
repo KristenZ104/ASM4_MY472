@@ -1,0 +1,545 @@
+---
+title: Assignment 4
+author: 202341436
+date: 08-01-2024
+output: html_document
+---
+
+```{r setup, include=FALSE} 
+# this chunk contains code that sets global options for the entire .Rmd. 
+# we use include=FALSE to suppress it from the top of the document, but it will still appear in the appendix. 
+
+knitr::opts_chunk$set(echo = FALSE) # actually set the global chunk options. 
+# we set echo=FALSE to suppress code such that it by default does not appear throughout the document. 
+# note: this is different from .Rmd default
+```
+
+The codes will be uploaded at [Github](https://www.rollingstone.com/music/music-lists/100-greatest-artists-147446/).
+
+## Introduction
+
+In the ever-evolving landscape of music, the question of an artist's enduring legacy is a fascinating exploration into the dynamic interplay between time, taste, and cultural resonance. As we stand at the threshold of 2024, a critical inquiry beckons: How has the music of these renowned artists endured, and what features or characteristics might elucidate the enduring engagement of their work? 
+
+This research seeks to find the answer. We plan to use the current popularity of artists on Spotify as an indicator of popularity, analyze their fan base, recent release dates, number of tracks, song style, song ratings, and other factors to understand whether these artists will become popular in 2023.
+
+## Data
+
+We will obtain data from three data sources.
+
+The first source of data is "the 100 greatest music artists" published by [Rolling Stone on their website](https://www.rollingstone.com/music/music-lists/100-greatest-artists-147446/) in December 2010. The website introduces the rankings, names, and descriptions of artists. Due to the dynamic loading of content about multiple artists on the website, we will use the virtual WebDriver provided by the `RSelenium` package to crawl the information on the webpage.
+
+The second source of data is [the Spotify Web API](https://developer.spotify.com/documentation/web-api). This is the Spotify website used to allow users to batchly obtain information about desired artists or tracks. We need to register an account and apply for API Key activation on Spotify. We will use `httr` package's POST method to obtain various information about the artists and tracks we want, including the number of followers of artists on Spotify, song genres, popularity, and so on.
+
+The third source of data is [Musicbrainz API](https://musicbrainz.org/doc/MusicBrainz_API). The Musicbrainz website provides more information on artists including ratings, genres and tags, which can help us understand the popularity of more artists.
+
+We will combine data from different sources by artist name. Then I will store the captured artist and track information in separate datasets, and then save it in a local `Rdata` file. In this way, for our analysis after completing the crawling, we do not need to repeat the crawling, but instead obtain the corresponding data files by loading the local data file.
+
+## Analysis
+
+After capturing the data of Rolling Stones and the followers and popularity of artists on Spotify, we can take a preliminary look at the corresponding results:
+
+```{r, warning=F, message=F, fig.width=8, fig.height=4}
+library(tidyverse)
+library(patchwork)
+
+load("rollingstone.RData")
+
+# Create a plot of the top 20 artists by followers on Spotify
+p1 <- rollingstone_df_combined %>%
+  mutate(rank_id = as.factor(rank_id)) %>% # Convert rank_id to a factor for better plotting
+  arrange(-follower) %>% # Place the top 20 artists by followers in a descending manner
+  head(20) %>%
+  ggplot(aes(x=reorder(artist, follower), y=follower)) +
+  geom_col(fill="#2cc1da", col="black", alpha=.6) + # Use colored bars to represent each artist
+  labs(x="Artist", ylab="followers", title="Top 20 artists with followers") +
+  scale_y_continuous(label=scales::label_number(accuracy = 1)) + # Format y-axis labels to round to the whole number
+  coord_flip() + # Flip the plot to display horizontal bars
+  theme_bw()
+
+# Create a scatter plot showing the relationship between rank in Rolling Stone rank and latest popularity on Spotify
+p2 <- ggplot(rollingstone_df_combined, aes(x=rank_id, y=popularity)) + 
+  geom_point(col="#2b7cd3", alpha=.6) + # Plot points for each artist
+  labs(x="Rank in Rolling Stone", y="Latest Popularity", 
+       title="Popularity vs. Rolling Stone Rank") +
+  theme_bw()
+
+p1 + p2
+```
+
+By observing the followers on Spotify, we found that among the 100 great artists selected at the end of 2010, Eminem and Queen's followers were significantly ahead of other artists, at around 8 million and 5 million respectively. The fan base of other artists ranges from 1 million to 3 million. Popularity on Spotify is an indicator that measures the popularity of a work based on its playback, ranging from 0 to 100. The higher the value, the more popular the artist is. It can be observed that the median popularity of these 100 artists at the end of 2023 was 67, and the degree of dispersion was relatively high. 
+
+Let's take a look at the top 10 and bottom 10 artists respectively:
+
+```{r, warning=F, message=F}
+# Explore the top 10 artists in terms of popularity
+rollingstone_df_combined %>%
+  arrange(-popularity) %>% # Place the top 10 artists in a descending pattern regarding popularity
+  dplyr::select(rank_id, artist, popularity, genre) %>%
+  head(10)
+
+# Explore the bottom 10 artists in terms of popularity
+rollingstone_df_combined %>%
+  arrange(popularity) %>% # Place the bottom 10 artists in an ascending pattern regarding popularity
+  dplyr::select(rank_id, artist, popularity, genre) %>%
+  head(10)
+```
+
+The band "Parliament and Funkadelic" seems to have undergone a name change, resulting in no valid information being retrieved from Spotify. Overall, among artists with lower popularity, no very obvious genes were found, except for the classic girl group. Among the artists who still have high popularity, we found that hip hop and various rock categories are relatively high. However, Spotify's segmentation of genes is relatively detailed, which makes it difficult to classify and analyze them well.
+
+Next, we will observe the impact of fan base, latest album release date, and average album track count on popularity:
+
+```{r, message=F, warning=F, fig.width=10, fig.height=4}
+# Visualization for the relationship between number of followers and popularity
+p3 <- rollingstone_df_combined %>%
+  ggplot(aes(x=follower, y=popularity)) +
+  geom_point(col="#05e5e3", alpha=.6) +
+  geom_smooth(method="lm", se=F, linewidth=.6, col="grey70", linetype="dashed") + # Add a linear regression line to visualize the trend
+  labs(x="Followers (in millions)", y="Popularity") +
+  scale_x_continuous(trans='log10', labels=function(x) paste0(x / 1e6, "M")) + # Apply a log transformation and label in millions
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) # Center the plot title
+
+# Visualization for the relationship between album release date and popularity
+p4 <- rollingstone_df_combined %>%
+  ggplot(aes(x=release_date, y=popularity)) +
+  geom_point(col="#58e285", alpha=.6) +
+  geom_smooth(method="lm", se=F, linewidth=.6, col="grey70", linetype="dashed") + # Add a linear regression line to visualize the trend
+  labs(x="Release Date") +
+  theme_bw()
+
+# Visualization for the relationship between average track number per album and popularity
+p5 <- rollingstone_df_combined %>%
+  ggplot(aes(x=track_num, y=popularity)) +
+  geom_point(col="#c42b1c", alpha=.6) +
+  geom_smooth(method="lm", se=F, linewidth=.6, col="grey70", linetype="dashed") + # Add a linear regression line to visualize the trend
+  labs(x="Average Track Num") + 
+  theme_bw()
+
+p3 + p4 + p5
+```
+
+From the picture, it can be seen that artists with more fans will have higher popularity if they have recently released new albums. The average number of tracks per album does not seem to have a significant relationship with popularity.
+
+```{r, warning=F, message=F, fig.width=8, fig.height=3}
+load("musicbrainz_info.Rdata")
+
+# Combine MusicBrainz data with Spotify popularity data
+musicbrainz_info_combined <- musicbrainz_info %>%
+  left_join(rollingstone_df_combined[, c("artist", "popularity")], by=c("artist_name"="artist"))
+
+# Summarize the average rating and popularity by genre
+genre_rating <- musicbrainz_info_combined %>%
+  group_by(genre) %>%
+  summarise(
+    rating = mean(rating),
+    popularity = mean(popularity)
+  )
+
+# Prepare a bar plot for the top 10 genres by average rating
+p6 <- genre_rating %>%
+  arrange(-rating) %>% # Arrange in descending order by average ratings in the data frame
+  head(10) %>% # Select the top 10 genres
+  ggplot(aes(x=reorder(genre, rating), y=rating)) + # Reorder genres based on their average ratings in the plot
+  geom_col(fill="#40d2b1", col="black", alpha=.4) +
+  geom_text(aes(label=round(rating, 1)), position = position_stack(vjust = 0.5)) + # Add text labels for ratings, and rounds them to one decimal place
+  labs(x="Genre", y="Rating") +
+  coord_flip() + # Flip the plot to display horizontal bars
+  theme_bw()
+
+# Prepare a bar plot for the top 10 genres by average popularity
+p7 <- genre_rating %>%
+  arrange(-popularity) %>% # Arrange in descending order by average popularity in the data frame
+  head(10) %>% # Select the top 10 genres
+  ggplot(aes(x=reorder(genre, popularity), y=popularity)) + # Reorder genres based on their average popularity in the plot
+  geom_col(fill="#41a5ee", col="black", alpha=.4) +
+  geom_text(aes(label=round(popularity, 1)), position = position_stack(vjust = 0.5)) + # Add text labels for popularity scores, and rounds them to one decimal place
+  labs(x="Genre", y="Popularity") +
+  coord_flip() + # Flip the plot to display horizontal bars
+  theme_bw()
+
+p6 + p7
+```
+
+From the result, we can find the gene with highest rates and popularity From the results, it can be seen that various music styles have received positive reviews from the audience, with the most outstanding being soul jazz, northern soul, latin rock, jazz blues, and close harmony. In popularity, the most common styles are Piano Rock, Britpop, New Jack Swing, and Dance Pop. We can see that although jazz style will receive positive reviews, it hasn't been able to continue to be popular. In popular styles, it is often the more cheerful and rhythmic music style. On the contrary, some more elegant music styles, although highly praised and selected as great artists, are difficult to sustain popularity in 2023.
+
+```{r, warning=F, message=F, eval=F}
+library(httr)
+library(RSelenium)
+library(rvest)
+library(tidyverse)
+library(netstat)
+library(base64enc)
+library(jsonlite)
+library(lubridate)
+```
+
+```{r, warning=F, message=F, eval=F}
+# Specify the file path of geckodriver
+geckodriver_path <- "/usr/local/bin/geckodriver"
+
+#URL of the Rolling Stone '100 Greatest Artists' (2010) page
+target_url <- "https://www.rollingstone.com/music/music-lists/100-greatest-artists-147446/"
+
+# Start Firefox using rsDriver with specified geckodriver path (as it cannot always work smoothly without this in my device)
+rD <- rsDriver(port=free_port(random=T), browser="firefox", 
+               extraCapabilities = list(marionette = TRUE, 
+               "moz:webdriverClick" = FALSE, "geckodriver_path" = geckodriver_path))
+driver <- rD$client
+driver$open()
+
+# Navigate to the Rolling Stone 100 greatest artists page
+driver$navigate(target_url)
+
+# Function to accept privacy agreement if present, using CSS seletor
+accept_privacy <- function() {
+  # CSS selector of the 'Accept' button in the privacy agreement
+  accept_button_css <- "#onetrust-accept-btn-handler"
+  tryCatch({
+    # Attempt to find and click the privacy accept button
+    driver$findElement(using = 'css selector', value = accept_button_css)$clickElement()
+    Sys.sleep(3)  # Wait for the privacy agreement to be processed
+  }, error = function(e) {
+    # Handle the error (occurs if the element is not found)
+    message("Privacy agreement not found or already accepted.")
+  })
+}
+
+# Accept privacy agreement if it appears
+accept_privacy()
+
+# Function to 'Load More' content (to the next page - from artists top 50-1), using xpath
+load_more <- function() {
+  # Find load more button
+  target <- driver$findElement(
+    "xpath", 
+    "/html/body/div[5]/main/div[2]/div[1]/div/article/div[3]/div[2]/div[2]/a"
+  )
+  
+  # Click load more button
+  target$clickElement()
+  Sys.sleep(3)  # Wait for content to load
+}
+
+# Function to get artist information with CSS class name
+get_artist_info <- function() {
+  # Find the rank of the artist
+  rank_elements <- driver$findElements(
+    "class name",
+    "c-gallery-vertical-album__number"
+  )
+  
+  #Find the artist name
+  artist_elements <- driver$findElements(
+    "class name", 
+    "c-gallery-vertical-album__title"
+  )
+  
+  #Find the description of the artist
+  desc_elements <- driver$findElements(
+    "class name", 
+    "c-gallery-vertical-album__description"
+  )
+  
+  # Extract text from each element
+  ranks <- sapply(rank_elements, function(x) x$getElementText()[[1]])
+  artists <- sapply(artist_elements, function(x) x$getElementText()[[1]])
+  descriptions <- sapply(desc_elements, function(x) x$getElementText()[[1]])
+  
+  # Store all the information into a data frame
+  rollingstone_df <- data.frame(
+    rank_id = ranks,
+    artist = artists,
+    description = descriptions
+  )
+  
+  return(rollingstone_df)
+}
+
+# Based on the numerically reverse order layout of the webpage
+# Get the last 50 artists' information
+rollingstone_df_51_100 <- get_artist_info()
+
+# Load more to the next page
+load_more()
+
+# Get the top 1-50 artists' information
+rollingstone_df_1_50 <- get_artist_info()
+
+# Combine the data and sort
+rollingstone_df <- bind_rows(rollingstone_df_1_50, rollingstone_df_51_100) %>%
+  mutate(rank_id = as.numeric(rank_id)) %>%
+  arrange(rank_id)
+
+# Close the browser driver
+driver$close()
+
+```
+
+```{r, warning=F, message=F, eval=F}
+# Save the API in key to a newly created local '.env' file
+# Read environment variables from 'spotify_api.env' file
+readRenviron("spotify_api.env")
+
+# Retrieve the client ID and secret from the environment variables
+# Keeps the information secure and out of the script
+client_id <- Sys.getenv("CLIENT_ID")
+client_secret <- Sys.getenv("CLIENT_SECRET")
+
+# Create a base64-encoded string of the client ID and client secret (for Spotify API authentication)
+credentials <- paste0(client_id, ':', client_secret)
+base64_credentials <- base64enc::base64encode(charToRaw(credentials))
+
+# Set up the authentication request to Spotify API
+# Obtains an access token for API requests
+auth_response <- httr::POST(
+  'https://accounts.spotify.com/api/token',
+  add_headers(
+    Authorization = paste0('Basic ', base64_credentials),
+    'Content-Type' = 'application/x-www-form-urlencoded'
+  ),
+  body = list(grant_type = 'client_credentials'),
+  encode = 'form'
+)
+
+# Check http error and print error details if present
+if (http_error(auth_response)) {
+  print(status_code(auth_response))
+  print(content(auth_response, "text"))
+} else {
+  # Extract the access token from the response that used for subsequent API requests
+  access_token <- httr::content(auth_response)$access_token
+}
+
+# Function to get Spotify artist ID of a specified artist
+# The query includes: the artist's name, and the search type is 'artist'
+get_artist_spotify_id <- function(artist) {
+  # Set up search query
+  url <- 'https://api.spotify.com/v1/search'
+  res <- httr::GET(
+    url,
+    query = list(q = artist, type = "artist"), 
+    add_headers(Authorization = paste0('Bearer ', access_token)) 
+  )
+  
+  # Set a short delay to prevent the rate limiting issue
+  Sys.sleep(1)
+  
+  # Get the Spotify ID
+  results <- content(res, "parsed")
+  
+  # Return the artist's id if find any search result
+  if (length(results$artists$items) > 0) {
+    artist_id <- results$artists$items[[1]]$id
+    return(artist_id)
+  } else {
+    return(NA)
+  }
+}
+
+# Function to get the more types of information about artists from Spotify using their Spotify ID
+# Retrieve data: artists' followers, musical genres, and popularity on Spotify
+get_artist_Spotify_info <- function(artist_id){
+  # Set up artists search query
+  url <- paste0('https://api.spotify.com/v1/artists/', artist_id)
+  res <- httr::GET(
+    url, 
+    add_headers(Authorization = paste0('Bearer ', access_token))
+  )
+  
+  # Prevent the rate limiting issue
+  Sys.sleep(1)
+  
+  # Get artist information - followers, genres, popularity
+  info <- content(res)
+  followers <- info$followers$total[1]
+  genres <- paste(info$genres[1], collapse = ",")
+  popularity <- info$popularity
+  
+  # Store them into a list
+  artist_info <- list(
+    Spotify_id = artist_id,
+    follower = followers, 
+    genre = genres, 
+    popularity = popularity
+  )
+  
+  return(artist_info)
+}
+
+# Search Spotify ID for each artist using their name
+rollingstone_df$Spotify_id <- sapply(
+  rollingstone_df$artist,
+  get_artist_spotify_id
+)
+
+# Search Spotify information for each artist using their Spotify ID
+artist_info <- do.call(bind_rows, lapply(
+  rollingstone_df$Spotify_id,
+  get_artist_Spotify_info
+))
+
+# Combine two data set
+rollingstone_df_combined <- rollingstone_df %>%
+  left_join(artist_info, by="Spotify_id")
+
+save(rollingstone_df_combined, file="rollingstone.RData")
+
+# Function to get album information from the Spotify using artist ID
+get_album_info <- function(artist_id) {
+  # Set up search query
+  url <- paste0("https://api.spotify.com/v1/artists/", artist_id, "/albums")
+  res <- httr::GET(
+    url, 
+    add_headers(Authorization = paste0('Bearer ', access_token))
+  )
+  
+  # Parse the response to extract album information
+  info <- content(res)
+  
+  # Store the results
+  if (is.null(info$items)) {
+    return(NA)
+  }
+  
+  # Define vectors to store album details
+  n_info <- length(info$items)
+  artist_name <- rep(NA, n_info)
+  album_Spotify_id <- rep(NA, n_info)
+  album_name <- rep(NA, n_info)
+  release_date <- rep(NA, n_info)
+  track_num <- rep(NA, n_info)
+  
+  # If there are any items in album info, process them
+  # Loop over and extract each album's information: artist name, Spotify ID, album name, release data, number of tracks
+  # Process the missing value into NA
+  if (!is.null(info$items) & n_info > 0) {
+    for (i in seq_len(n_info)) {
+      artist_name[i] <- ifelse(is.null(info$items[[i]]$artists[[1]]$name), NA,  info$items[[i]]$artists[[1]]$name)
+      album_Spotify_id[i] <- ifelse(is.null(info$items[[i]]$id), NA, info$items[[i]]$id)
+      album_name[i] <- ifelse(is.null(info$items[[i]]$name), NA, info$items[[i]]$name)
+      release_date[i] <- ifelse(is.null(info$items[[i]]$release_date), NA, info$items[[i]]$release_date)
+      track_num[i] <- ifelse(is.null(info$items[[i]]$total_tracks), NA, info$items[[i]]$total_tracks)
+    }
+  }
+  
+  # Store the result into a data frame
+  album_data <- data.frame(
+    Spotify_id = artist_id,
+    artist_name = artist_name,
+    album_Spotify_id = album_Spotify_id,
+    artist_name = artist_name,
+    release_date = release_date,
+    track_num = track_num
+  )
+
+  return(album_data)
+}
+
+# Get all album information based on Spotify id
+album_data <- do.call(bind_rows, lapply(
+  rollingstone_df_combined$Spotify_id,
+  get_album_info
+))
+
+# Calculate the average number of tracks per album for each artist
+track_count <- album_data %>%
+  group_by(Spotify_id) %>%
+  summarise(track_num = mean(track_num, na.rm=T))
+
+# Get latest album data of artists
+latest_album_data <- album_data %>%
+  # Standardize the release date
+  mutate(
+    is_full_date = str_detect(release_date, "\\d{4}-\\d{2}-\\d{2}"),
+    release_date = case_when(
+      is_full_date == TRUE ~ ymd(release_date),
+      is_full_date == FALSE ~ ymd(paste0(release_date, "-01-01")),
+      TRUE ~ NA
+    )
+  ) %>%
+  # Select necessary columns and filter for the latest album
+  dplyr::select(-is_full_date, -artist_name, -track_num, -artist_name.1) %>%
+  group_by(Spotify_id) %>%
+  filter(release_date == max(release_date, na.rm=T)) %>%
+  filter(row_number() == 1)
+
+# Combine artist information and latest album data
+rollingstone_df_combined <- rollingstone_df_combined %>%
+  left_join(latest_album_data, by="Spotify_id") %>%
+  left_join(track_count, by="Spotify_id")
+
+save(rollingstone_df_combined, file="rollingstone.RData")
+```
+
+```{r, warning=F, message=F, eval=F}
+# Function to retrieve information about an artist from MusicBrainz
+get_musicbrainz_info <- function(artist_name) {
+  # Replace spaces with '%20' for URL encoding
+  if (str_detect(artist_name, " ")) {
+    artist_name1 <- gsub(" ", "%20", artist_name)
+  } else {
+    artist_name1 <- artist_name
+  }
+  # Construct the first query URL to search for the artist by name
+  query_url <- sprintf(
+    "https://musicbrainz.org/ws/2/artist?query=%s&fmt=json", 
+    artist_name1)
+  res <- httr::GET(query_url)
+  artist_id <- content(res)$artists[[1]]$id
+  
+  # Construct the second query URL to get detailed information using the artist ID
+  query_url2 <- sprintf(
+    "https://musicbrainz.org/ws/2/artist/%s?inc=aliases+genres+tags+ratings&fmt=json",
+    artist_id)
+  res2 <- httr::GET(query_url2)
+  
+  # Extract rating, genres, and tags if the response status is 200 (representing 'OK')
+  if (res2$status_code == 200) {
+    rating <- content(res2)$rating$value
+    genres <- sapply(content(res2)$genre, function(x) x$name)
+    tags <- sapply(content(res2)$tags, function(x) x$name)
+  }
+  
+  # Handle missing data
+  if (is.null(rating)) rating <- NA
+  if (is.null(genres) | length(genres) == 0) genres <- NA
+  if (is.null(tags) | length(genres) == 0) tags <- NA
+  
+  # Combine the extracted data
+  result_df <- data.frame(
+    artist_name = artist_name,
+    genre = genres,
+    rating = rating
+  )
+  
+  # Wait for a second to avoid rate limiting
+  Sys.sleep(1)
+  
+  return(result_df)
+}
+
+# Create an empty data frame to store MusicBrainz information
+musicbrainz_info <- c(
+  artist_name = c(),
+  genre = c(),
+  rating = c()
+)
+
+# Loop over each artist in the combined dataset and retrieve their MusicBrainz info
+for (artist in rollingstone_df_combined$artist) {
+  temp_df <- get_musicbrainz_info(artist)
+  musicbrainz_info <- bind_rows(musicbrainz_info, temp_df)
+  
+  # Pause to avoid rate limiting
+  Sys.sleep(1)
+}
+
+save(musicbrainz_info, file="musicbrainz_info.Rdata")
+```
+
+## Appendix: All code in this assignment
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE} 
+# this chunk generates the complete code appendix. 
+# eval=FALSE tells R not to run (``evaluate'') the code here (it was already run before).
+```
