@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = FALSE) # actually set the global chunk options.
 # note: this is different from .Rmd default
 ```
 
-The codes will be uploaded at [Github](https://www.rollingstone.com/music/music-lists/100-greatest-artists-147446/).
+The report and code appendix will be uploaded at [here](https://github.com/KristenZ104/ASM4_MY472.git).
 
 ## Introduction
 
